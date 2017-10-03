@@ -70,9 +70,97 @@ Thus, the classification can easily be performed on analysis or re-analysis
 data (as in the package example), but also on numerical weather prediction
 (NWP) forecasts.  Please note that only regular latlong grids are supported!
 
+\section{Methodology}
+
+Originally the COST 733 WLK classification returns a set of strings and IDs
+for the prevailing weather situation. The IDs are unique for a specific 
+combination classified geopotential pattern (cyclonic/anticyclonic on
+500/850~hPa), main wind direction, and whether the atmosphere is dry or wet
+given a baseline climatology.
+
+\pkg{Rcost} does not return the combined classes. Instead the raw numeric
+values (plus binary classes) are returned. As an example: the original
+algorithm classifies cyclonicity as \code{1} (anticyclonicity as \code{0})
+but looses the information about the strength of the curvature. \pkg{Rcost}
+returns both, binary \code{0/1}, but also the numeric value for the curvature
+which is very useful for certain applications.
+
+\subsubsection*{In general: the weights}
+
+For all `variables' or sub-classes in the WLK classification a spatial weighting
+scheme is used (based on the weight mask, see Subsec.~\ref{subsec:weights}).
+
+\subsubsection*{Wet or Dry}
+
+\pkg{Rcost} is currently using total column water (\code{tcw}) from the input files.
+It describes the amount of water contained in a vertical column trough the entire
+atmosphere and will be returned as ``precipitable water index'' (\code{pwi}; see
+classifier output: Sec.~\ref{sec:output}).
+
+\begin{equation}
+   \mbox{pwi} = \frac{ \sum_{i=1}^I\sum_{j=1}^J \mbox{tcw}_{i,j} w_{i,j}
+                }{\sum_{i=1}^I \sum_{j=1}^J w_{i,j}}
+\end{equation}
+
+\dots which is simply the weighted mean over all $\mbox{tcw}_{i,j} w_{i,j}$
+over all grid cells where $\mbox{tcw}$ is the total column water from the input file,
+$w$ our weight mask, and $(i,j)$ all grid cells in our domain (with $i=1,I$ along
+longitude and $j=1,J$ along latitude).
+
+As the amount of water uptake of a certain volume of air depends on temperature
+the values show a strong seasonal signal. Therefore, the $\mbox{pwi}$ values
+are compared against a background climatology (which has to be provided, see
+Sec.~\ref{sec:settings}). If the climatology \code{pwclim} is set when calling
+\code{getClassification(\dots)} the output column \code{wet} (see Sec.~\ref{sec:output})
+is set to \code{1} if $\mbox{pwi}_{\mbox{yday}} > \mbox{pwclim}_{\mbox{yday}}$ end
+\code{0} else. Subscript $\mbox{yday}$ indicates a certain day of the year, or
+Julian day.
+
+\subsubsection*{Cyclonic or Anticyclonic}
+
+The cyclonicity is computed on the geopotential height, for both, the 500~hecto~Pascal
+and 925~hecto~Pascal surface. To be specific: this is evaluated on the height
+(approx.) using $z = \mbox{geopotential height} / 10.0$ (see original Fortran code).
+
+\begin{equation}
+   c = \frac{ z_{i+1,j} + z_{i-1,j} + z_{i+j+1} + z_{i+j-1} - 4 z_{i,j}
+               }{\Delta x \Delta y}
+\end{equation} 
+
+\dots for all $i=2,I-1$ and $j=2,J-1$. The boundaries (where $i=1$, $i=I$, $j=1$, and
+$j=J$) are filled up with closest $i=2$, $i=I-1$, $j=2$, and $j=J-2$. The edges
+are filled with the values of the closest diagonal grid point
+(for $(1,1)$ $(2,2)$ is used, for $(1,J)$ $(2,J-1)$ and so far and so on).
+$\Delta x$ and $\Delta y$ represent the grid spacing and are computed
+as follows:
+
+\begin{equation}
+   \Delta x = \big[\sin(\mbox{lat}_{i})\sin(\mbox{lat}_{i}) +
+              \cos(\mbox{lat}_{i})\cos(\mbox{lat}_{i})\cos(\mbox{lon}_{j-1}-\mbox{lon}_{j+1})\big]
+              \frac{R \pi}{180.}
+\end{equation}
+\begin{equation}
+   \Delta y = \big[\sin(\mbox{lat}_{i-1})\sin(\mbox{lat}_{i+1}) +
+              \cos(\mbox{lat}_{i-1})\cos(\mbox{lat}_{i+1})\big] \frac{R \pi}{180.}
+\end{equation}
+
+\dots where $\mbox{lon}$ and $\mbox{lat}$ are in degrees radiant and
+$R = 6371.0087714$ is the earth radius in kilometers.
+
+If this value $c$ (output \code{c500} and \code{c925}, see Sec.~\ref{sec:output})
+is bigger than $0.0$ they will be classified as cyclonic, else anticyclonic.
+As for \code{pwi} the \pkg{Rcost} package returns both, the numeric value and
+a binary classification (\code{0}/\code{1}).
 
 
-\section{Input Data}
+\subsubsection*{Main Wind Sector}
+
+Bla ...
+
+
+
+
+\section{Input Data}\label{sec:input}
 
 The main method to retrieve the WLK classification is \code{getClassification(\dots)}
 which expects the input data as two NetCDF files. Two files are required as 
@@ -93,7 +181,8 @@ The function \code{demofiles()} returns a \code{list} containing the
 file names (\code{character} strings) of the two demo files.
 
 
-\section{Parameters and Settings}
+
+\section{Parameters and Settings}\label{sec:settings}
 
 COST 733 WLK provides a set of ``tuning parameters'', options, or settings. 
 Not all of them are implemented yet in the \code{Rcost} package, but---if
@@ -123,8 +212,7 @@ Implemented settings or options:
       European Alps.
 \end{itemize}
 
-
-\subsection{Subset and Weights}
+\subsection{Weights and Stripsize}\label{subsec:weights}
 
 The classification uses a (squared) centered weighting mask for the
 area of interest. This is done by specifying a weight mask, typically
@@ -209,7 +297,9 @@ names(res) <- c("weightmask","weightmask_ZAMG")
 ## Plot
 plot( res, nc = 2, col=rev(terrain.colors(17))[3:17], asp = NA )
 @
-\caption{foo}
+\caption{Weight mask using the cost weightmask function (left) and ZAMG weightmask
+   function (right). Note that the ZAMG weight mask uses hardcoded longitude/latitude
+   limits.}
 \end{figure}
 
 \textcolor{red}{Warning:} please note that the \code{zamg = TRUE} mode works
@@ -262,6 +352,8 @@ x  <- getClassification( nc, init )
 for ( n in nc ) nc_close( n )
 @
 
+\section{Output}\label{sec:output}
+
 The output variable \code{x} contains the COST 733 classification. Namely the
 columns:
 <<class-2,echo=TRUE,fig=FALSE>>=
@@ -297,8 +389,14 @@ nc_close(nc)
 @
 As we have not specified a subset the classification \code{x} is based on the
 whole domain as provided by the demo files (\Sexpr{tmp[[1]]} to \Sexpr{tmp[2]}).
-However, the function provides a variety of input arguments to adjust the 
-classification and customize it. As an example:
+
+
+
+
+\section*{Appendix/Examples}
+
+The \pkg{Rcost} \code{getClassification} function provides a variety of input
+arguments to adjust the classification and customize it. Some examples:
 
 <<custom-0,echo=TRUE,fig=FALSE>>=
 files <- demofiles(TRUE)
