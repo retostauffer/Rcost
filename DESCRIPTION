@@ -1,0 +1,12 @@
+Package: Rcost
+Type: Package
+Title: Cost 733 WLK Classification in R
+Version: 0.0-2
+Date: 2017-06-20
+Author: Reto Stauffer
+Maintainer: Reto Stauffer <reto.stauffer@uibk.ac.at>
+Description: A small R interface to the cost733 WLK classification method.
+Depends: R (>= 3.2.0)
+Imports: zoo, raster, ncdf4, sp
+LazyData: false
+License: GPL 

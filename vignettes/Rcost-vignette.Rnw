@@ -1,0 +1,376 @@
+\documentclass[a4paper]{article}
+
+%% Required packages
+\usepackage{hyperref}
+
+%% need no \usepackage{Sweave}
+\newcommand{\pkg}[1]{\texttt{#1}}
+\newcommand{\code}[1]{\texttt{#1}}
+
+
+\usepackage{Sweave}
+\setkeys{Gin}{width=\textwidth}
+
+%\setlength{\textheight}{15cm}
+\setlength{\textwidth}{13cm}
+%\setlength{\topmargin}{-1.6cm}
+%\setlength{\headheight}{0.5cm}
+%\setlength{\headsep}{0.8cm}
+%\setlength{\footskip}{0.8cm}
+%\setlength{\oddsidemargin}{-1.0cm}
+%\setlength{\evensidemargin}{-1.0cm}
+%\setlength{\parindent}{0cm}
+%\setlength{\parskip}{6pt}
+%\linespread{1.1}
+
+\usepackage{fancyvrb}
+\DefineVerbatimEnvironment{Sinput}{Verbatim}{fontshape=sl,fontsize=\small}
+\DefineVerbatimEnvironment{Soutput}{Verbatim}{fontsize=\small}
+\DefineVerbatimEnvironment{Scode}{Verbatim}{fontshape=sl,fontsize=\small}
+
+
+\author{Reto Stauffer\\University of Innsbruck}
+
+\title{\pkg{Rcost} Introduction}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This package contains a user-friendly and handy interface
+to the COST Action 733 WLK (Wetterlagenklassifikation) 
+algorithm. The motivation of the COST Action 733 was to
+``achieve a general numerical method for assessing, comparing
+and classifying weather situations in Europe, scalable to any European
+(sub)region with time scales between 12~hours and 3~days and spatial
+scales of ca. 200 to 2\,000~km.''
+
+Details can be found on \verb|http://cost733.met.no/|. This
+R package interfaces one routine which was developed during the
+COST 733 Action with some minor modifications. Not all tuning parameters
+are implemented yet. Implementation of these parameters should be feasible
+if needed.
+\end{abstract}
+
+\section{COST Action 733: WLK}
+
+The WLK (Wetterlagenklassifikation) algorithm is a relatively simple
+grid-based method to classify large-scale weather patterns. 
+The \pkg{Rcost} package interfaces the fortran code \code{cost733\_wlk\_1.07.f90}
+which can be found here:
+\url{http://cost733class.geo.uni-augsburg.de/moin/cost733wiki/data/pages_bak/WLKC733/}
+
+The analysis uses the two wind speed components (\code{u} zonal, \code{v}
+meridional) in 700~hecto~Pascal, the (geopotential) height of the
+500~hecto~Pascal and 925~hecto~Pascal surface plus (\code{z} in our case) the
+total column water content (\code{tcw}) of a pre-specified (sub)region.
+
+Thus, the classification can easily be performed on analysis or re-analysis
+data (as in the package example), but also on numerical weather prediction
+(NWP) forecasts.  Please note that only regular latlong grids are supported!
+
+
+
+\section{Input Data}
+
+The main method to retrieve the WLK classification is \code{getClassification(\dots)}
+which expects the input data as two NetCDF files. Two files are required as 
+surface level data and pressure level data cannot be mixed (at least not when using
+\code{grib\_to\_netcdf} from the ECMWF GribAPI library I used).
+
+\code{Rcost} contains two example files which can be loaded via 
+\code{demofiles()}:
+
+<<loaddata,echo=TRUE,fig=FALSE>>=
+## Loading demo data (as NetCDF)
+library("Rcost")
+nc <- demofiles()
+print( names(nc) )
+@
+
+The function \code{demofiles()} returns a \code{list} containing the
+file names (\code{character} strings) of the two demo files.
+
+
+\section{Parameters and Settings}
+
+COST 733 WLK provides a set of ``tuning parameters'', options, or settings. 
+Not all of them are implemented yet in the \code{Rcost} package, but---if
+required---adding them should not be a big deal.
+
+Implemented settings or options:
+\begin{itemize}
+   \item \code{steps}: allows to subset in time (only take some steps out of 
+      all time steps provided by the input data files).
+   \item \code{subset}: an \code{extent} object to specify an areal subset
+      on which the classification should be performed. If not given, the
+      whole are as provided by the input files will be used.
+   \item \code{pwclim}: precipitable water climatology (warning: that's the
+      original COST 733 name, while I am currently using total column water
+      content (\code{tcw}); be aware of this). If given a binary dry/wet
+      class will be returned.
+   \item \code{weights}: weights for the `core`, `mid`, and `margin` area
+      (see below).
+   \item \code{nsector}: number of wind sectors for the classification.
+   \item \code{maindirthreshold}: threshold of (weighted) grid cells to
+      have the same wind direction for a wind sector to be choosen.
+      If none of the wind sectors exceed this threshold no main wind
+      direction will be classified (variable).
+   \item \code{zamg}: special mode as used by the ZAMG\footnote[1]{Zentralanstalt
+      f\"ur Meteorologie und Geodynamik, Vienna, Austria}. Uses pre-specified
+      \code{subset}, \code{weights}, and tailored wind sectors for the
+      European Alps.
+\end{itemize}
+
+
+\subsection{Subset and Weights}
+
+The classification uses a (squared) centered weighting mask for the
+area of interest. This is done by specifying a weight mask, typically
+done internally (in \code{getClassification(\dots)} given the inputs.
+
+For demonstration purposes these masks can also be created manually
+using the \code{weightmask(\dots)} function of the package.
+The extent is here defined by \code{lon} and \code{lat}, the weights
+for the three different segments by vector \code{weights}.
+\code{stripsize} can be used to change the weighting scheme. By default
+\code{stripsize=5}: the area is split by 5 along longitude and latitude.
+The outer $1/5$\textit{th} of the area then belongs to `margin`, the
+next $1/5$\textit{th} to `mid` and $1/5 \times 1/5$ defines the core.
+
+\begin{figure}[!h]
+\centering
+<<weight-mask-1,echo=TRUE,fig=TRUE,width=10,height=2.7>>=
+## Helper function: Converts weight mask into raster
+wm2raster <- function( x, grid, name ) {
+   attach(grid); delta <- median(diff(lon))
+   res <- raster( x[nrow(x):1,], xmn=min(lon)-delta/2, xmx=max(lon)+delta/2,
+                                 ymn=min(lat)-delta/2, ymx=max(lat)+delta/2 )
+   names(res) <- name; return( res )
+}
+
+## Sepcify weight mask for a grid 10E40N to 20E50N with
+## a grid spacing of 0.25 degrees (regular ll)
+grid <- list( lon = seq(20, 40, by = 0.25), 
+              lat = seq(30, 50, by = 0.25) )
+## Specify the weights for:
+## - core segment
+## - mid segment
+## - margin segment
+weights <- c(15,2,1)
+## Get weight mask
+w1 <- weightmask( grid$lon, grid$lat, weights )
+
+## We can, of course, also use different weights
+w2 <- weightmask( grid$lon, grid$lat, c(10,5,3) )
+
+## Or different stripsize
+w3 <- weightmask( grid$lon, grid$lat, c(10,5,3), stripsize = 7 )
+w4 <- weightmask( grid$lon, grid$lat, c(10,5,3), stripsize = 11 )
+
+## Create a RasterStack object for plotting purposes.
+library("raster")
+res <- stack( wm2raster( w1, grid, "weightmask_w1" ),
+              wm2raster( w2, grid, "weightmask_w1" ),
+              wm2raster( w3, grid, "weightmask_w1" ),
+              wm2raster( w4, grid, "weightmask_w1" ) )
+
+## Plot
+plot( res, nc = 4, col=rev(heat.colors(20))[6:20], asp = NA )
+@
+\caption{Example of four different weighting mask specifications. Typically
+done inside the getClassification method.}
+\end{figure}
+
+Note that, if you set \code{getClassification(\dots,zamg=TRUE)} 
+\code{weightmaskZAMG(\dots)} instead of \code{weightmask(\dots)} is used.
+
+
+\setkeys{Gin}{width=.7\textwidth}
+\begin{figure}
+\centering
+<<weight-mask-2,echo=TRUE,fig=TRUE,width=7.0,height=3>>=
+## Create RasterStack again, once with the default weight mask,
+## once with the weight mask for the ZAMG mode.
+## WARNING: zamg = TRUE uses 1.5E40.5N to 25.5E54.5N (hardcoded)
+grid <- list( lon = seq( 1.5, 25.5, by = 0.5),
+              lat = seq(40.5, 54.5, by = 0.5) )
+w1 <- weightmask( grid$lon, grid$lat )
+wZ <- weightmaskZAMG( grid$lon, grid$lat )
+
+
+## Create a RasterStack object for plotting purposes.
+res <- stack( wm2raster( w1, grid, "weight_cost" ),
+              wm2raster( wZ, grid, "weight_ZAMG" ) )
+              
+names(res) <- c("weightmask","weightmask_ZAMG")
+
+## Plot
+plot( res, nc = 2, col=rev(heat.colors(20))[6:20], asp = NA )
+@
+\caption{foo}
+\end{figure}
+
+\textcolor{red}{Warning:} please note that the \code{zamg = TRUE} mode works
+with a hardcoded sub-region! This mode is designed for the Alps and can only
+be applied there. Let's try what happens if we try to use a sub-region
+different than 1.5E40.5N to 25.5E54.5N with \code{weightmaskZAMG(\dots)}:
+
+\setkeys{Gin}{width=.7\textwidth}
+\begin{figure}
+\centering
+<<weight-mask-3,echo=TRUE,fig=TRUE,width=7.0,height=3>>=
+## Create RasterStack again, once with the default weight mask,
+## once with the weight mask for the ZAMG mode.
+grid <- list( lon = seq( 10, 30, by = 0.5),
+              lat = seq( 45, 60, by = 0.5) )
+w1 <- weightmask( grid$lon, grid$lat )
+wZ <- weightmaskZAMG( grid$lon, grid$lat )
+
+## Create a RasterStack object for plotting purposes.
+res <- stack( wm2raster( w1, grid, "weightmask_cost" ),
+              wm2raster( wZ, grid, "weightmask_ZAMG" ) )
+
+## Plot
+plot( res, nc = 2, col=rev(heat.colors(20))[6:20], asp = NA )
+@
+\caption{Weight mask using the cost weightmask function (left) and ZAMG weightmask
+   function (right). Note that the ZAMG weight mask uses hardcoded longitude/latitude
+   limits and is not centered anymore!}
+\end{figure}
+
+\section{Run Classification}
+
+The only function needed (beside \code{nc\_open} and \code{nc\_close} from the
+\pkg{ncdf4} package) is \code{getClassification}.
+\code{getClassification} takes care of identifying the correct fields in the
+input files, the spatial extent and the subsetting (if required), and the weights.
+
+<<class-1,echo=TRUE,fig=FALSE>>=
+## Getting reuqired packages
+library("Rcost"); library("ncdf4")
+## Get demo file location
+files <- demofiles()
+## Open NetCDF file connection
+nc <- list( nc_open(files$sfc), nc_open(files$pl) )
+## Extract correct initialization date/time (used to properly
+## specify the output object)
+init <- as.POSIXct( ncvar_get(nc[[1]],"time")[1]*3600, origin="1900-01-01" )
+x  <- getClassification( nc, init )
+## Close NetCDF files
+for ( n in nc ) nc_close( n )
+@
+
+The output variable \code{x} contains the COST 733 classification. Namely the
+columns:
+<<class-2,echo=TRUE,fig=FALSE>>=
+print( x )
+@
+
+The returned object \code{x} is of type \code{zoo} (see \pkg{zoo} package manual)
+containing the following information:
+
+\begin{itemize}
+   \item \code{yday}: day of the year, $[0-364]$ (analog to the R \code{POSIXlt}
+      specification) where \code{yday = 0} is the first of January.
+   \item \code{sector}: main wind sector, or \code{0} if no wind sector was found.
+   \item \code{cyclonic925}/\code{cyclonic500}: binary class whether the current
+      circulation is anticyclonic (\code{cyclonicXXX = 0}) or cyclonic (\code{cyclonicXXX = 1})
+      on the 925~hPa and 500~hPa surface, respectively.
+   \item \code{cyclonic500}: same as \code{cyclonic925} but for the 500~hPa level.
+   \item \code{wet}: binary response whether this time step is dry (\code{wet = 0})
+      or wet (\code{wet = 1}) compared to a climatology. As we haven't specified
+      \code{pwclim} when calling \code{getClassification(\dots)} all values will be
+      \code{-99} (classification not possible).
+   \item \code{c925}/\code{c500}: numeric value on which \code{cyclonic925} and
+      \code{cyclonic500} are based. 
+   \item \code{pwi}: numeric value on which \code{wet} is based (if \code{pwclim} is given).
+      Note: still based on total column water (\code{tcw}).
+\end{itemize}
+
+<<class-3,echo=FALSE,fig=FALSE>>=
+files <- demofiles( TRUE ); nc <- nc_open(files$sfc)
+lon <- range(ncvar_get(nc,"longitude")); lat <- range(ncvar_get(nc,"latitude"))
+tmp <- list( sprintf("%.1fE%.1fN",min(lon),min(lat)), sprintf("%.1fE%.1fN",max(lon),max(lat)) )
+nc_close(nc)
+@
+As we have not specified a subset the classification \code{x} is based on the
+whole domain as provided by the demo files (\Sexpr{tmp[[1]]} to \Sexpr{tmp[2]}).
+However, the function provides a variety of input arguments to adjust the 
+classification and customize it. As an example:
+
+<<custom-0,echo=TRUE,fig=FALSE>>=
+files <- demofiles(TRUE)
+nc <- list(nc_open(files$sfc),nc_open(files$pl))
+init <- as.POSIXct( ncvar_get(nc[[1]],"time")[1]*3600, origin="1900-01-01" )
+@
+
+\subsubsection*{Step-Subset}
+<<echo=TRUE,fig=FALSE>>=
+## Only the first two steps: +12h and +36h
+## Not sure why I count from 00 UTC from the init??
+getClassification( nc, init, steps = c(12,36) )
+@
+
+\subsubsection*{Provide pw climatology (creates binary dry/wet)}
+<<echo=TRUE,fig=FALSE>>=
+## Specify a subset (ZAMG subset) and use ZAMG mode
+pwclim <- rep(24.5,365) # demo: constant clim for the whole year
+getClassification( nc, init, pwclim = pwclim )
+@
+
+\subsubsection*{Different number of wind sectors}
+<<echo=TRUE,fig=FALSE>>=
+## Only four wind sectors
+getClassification( nc, init, nsector = 4 )
+@
+
+\subsubsection*{Spatial subset}
+<<echo=TRUE,fig=FALSE>>=
+## Specify a subset (using extent)
+getClassification( nc, init, subset = extent(c(1.5,25.5,40.5,54.5)) )
+@
+
+\subsubsection*{Spatial subset in combination with ZAMG mode}
+<<echo=TRUE,fig=FALSE>>=
+## Specify a subset (ZAMG subset) and use ZAMG mode
+getClassification( nc, init, subset = extent(c(1.5,25.5,40.5,54.5)), zamg = TRUE )
+@
+
+\subsubsection*{Use custom weights}
+<<echo=TRUE,fig=FALSE>>=
+## Specify a subset (ZAMG subset) and use ZAMG mode
+getClassification( nc, init, weights = c(10,5,4) )
+@
+
+\subsubsection*{Higher `main wind sector` frequency threshold}
+<<echo=TRUE,fig=FALSE>>=
+## Specify a subset (ZAMG subset) and use ZAMG mode
+getClassification( nc, init, maindirthreshold = 0.8 )
+@
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\end{document}

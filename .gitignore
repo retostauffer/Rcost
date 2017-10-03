@@ -1,0 +1,8 @@
+
+
+# Ignore compiled vignette
+vignettes/*
+
+# Ignore compiled code
+src/*.o
+src/*.so

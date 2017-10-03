@@ -1,0 +1,8 @@
+import("zoo")
+import("raster")
+import("ncdf4")
+
+useDynLib("Rcost")
+
+exportPattern("^[[:alpha:]]+")
+
