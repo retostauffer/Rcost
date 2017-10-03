@@ -26,7 +26,16 @@ getClassification <- function( nc, date, steps, subset, pwclim, weights, nsector
    # No re-gridding, take the ncfiles as they are.
    # examples: subset <- extent(c(1.5,25.5 ,40.5 ,54.5))
    # examples: subset <- raster(nrow=15,ncol=25,xmn=1,xmx=26,ymn=40,ymx=55)
-   if ( missing(subset) ) subset <- extent(c(1.5,25.5 ,40.5 ,54.5))
+   # If not set: take biggest overlapping subset possible
+   if ( missing(subset) ) {
+      lon <- lat <- list()
+      for ( n in nc ) {
+         lon[[length(lon)+1]] <- ncvar_get(n,"longitude")
+         lat[[length(lat)+1]] <- ncvar_get(n,"latitude")
+      }
+      subset <- extent( c(max(unlist(lapply(lon,min))), min(unlist(lapply(lon,max))),
+                          max(unlist(lapply(lat,min))), min(unlist(lapply(lat,max)))) )
+   }
 
    time[['getdata']] <- Sys.time()
    raster_tcw   <- getdata(nc,init,"tcw",steps,           subset=subset, silent=T)
@@ -71,8 +80,8 @@ getClassification <- function( nc, date, steps, subset, pwclim, weights, nsector
    # Prepare fortran inputs
    nj   <- as.integer(coord$nx) # columns: longitudes (x)
    ni   <- as.integer(coord$ny) # rows: latitudes (y)
-   lons <- sort( as.numeric(coord$lons) )
-   lats <- sort( as.numeric(coord$lats) )
+   lons <- sort( as.numeric(coord$lons) ) # sort, we also transpose the data
+   lats <- sort( as.numeric(coord$lats) ) # sort, we also transpose the data
 
    # The data
    time[['asarray']] <- Sys.time()

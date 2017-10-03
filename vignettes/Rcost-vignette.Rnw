@@ -177,7 +177,7 @@ res <- stack( wm2raster( w1, grid, "weightmask_w1" ),
               wm2raster( w4, grid, "weightmask_w1" ) )
 
 ## Plot
-plot( res, nc = 4, col=rev(heat.colors(20))[6:20], asp = NA )
+plot( res, nc = 4, col=rev(terrain.colors(17))[3:17], asp = NA )
 @
 \caption{Example of four different weighting mask specifications. Typically
 done inside the getClassification method.}
@@ -207,7 +207,7 @@ res <- stack( wm2raster( w1, grid, "weight_cost" ),
 names(res) <- c("weightmask","weightmask_ZAMG")
 
 ## Plot
-plot( res, nc = 2, col=rev(heat.colors(20))[6:20], asp = NA )
+plot( res, nc = 2, col=rev(terrain.colors(17))[3:17], asp = NA )
 @
 \caption{foo}
 \end{figure}
@@ -233,7 +233,7 @@ res <- stack( wm2raster( w1, grid, "weightmask_cost" ),
               wm2raster( wZ, grid, "weightmask_ZAMG" ) )
 
 ## Plot
-plot( res, nc = 2, col=rev(heat.colors(20))[6:20], asp = NA )
+plot( res, nc = 2, col=rev(terrain.colors(17))[3:17], asp = NA )
 @
 \caption{Weight mask using the cost weightmask function (left) and ZAMG weightmask
    function (right). Note that the ZAMG weight mask uses hardcoded longitude/latitude

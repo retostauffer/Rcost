@@ -39,7 +39,10 @@ getdata <- function(nc, init, varname, steps, level = NULL, subset = NULL, silen
    # we have to change the request. Therefore, set time.idx = FALSE if so.
    time.idx <- which(ncsteps %in% steps)
    if ( length(time.idx) == 1 & nc$dim$time$len == 1 ) time.idx = FALSE
-   if ( length(time.idx) != length(steps) ) stop("Problems to find some of the requested steps!")
+   if ( length(time.idx) != length(steps) ) {
+      cat(sprintf("Available steps (as read from NetCDF file):\n %s\n",paste(ncsteps,collapse=", ")))
+      stop("Problems to find some of the requested steps!")
+   }
    # Checking subset range if set
    lons <- ncvar_get(nc,"longitude"); lats <- ncvar_get(nc,"latitude")
 
@@ -77,15 +80,24 @@ getdata <- function(nc, init, varname, steps, level = NULL, subset = NULL, silen
          else                   { data <- ncvar_get(nc,varname)[idx.lon,idx.lat,lev.idx,time.idx] }
       }
    }
+
    # Prepare return value
    dx <- abs(mean(diff(lons))/2)
    dy <- abs(mean(diff(lats))/2)
    # If we only have one layer
    if ( length(dim(data)) == 2 ) {
+      # Rotate such that columns (left right) correspond to longitude
+      # and rows (bottom up) to longitude (bottom: south, top: north)
+      data <- aperm( data, c(2,1) )[,nrow(data):1]
+      # Rasterize
       data <- raster(t(data),xmn=min(lons)-dx,xmx=max(lons)+dx,ymn=min(lats)-dy,ymx=max(lats)+dy,
                crs=crs("+proj=longlat +datum=WGS84 +ellps=WGS84 +no_defs +towgs84=0,0,0"))
    # For multiple layers, multiple steps requested by the user
    } else {
+      # Rotate such that columns (left right) correspond to longitude
+      # and rows (bottom up) to longitude (bottom: south, top: north)
+      data <- aperm( data, c(2,1,3) )[,nrow(data):1,]
+      # Rasterize
       empty <- raster(ncols=dim(data)[1L],nrows=dim(data)[2L],
                xmn=min(lons)-dx,xmx=max(lons)+dx,ymn=min(lats)-dy,ymx=max(lats)+dy,
                crs=crs("+proj=longlat +datum=WGS84 +ellps=WGS84 +no_defs +towgs84=0,0,0"))

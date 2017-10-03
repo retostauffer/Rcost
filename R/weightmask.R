@@ -7,7 +7,7 @@
 # -------------------------------------------------------------------
 # - EDITORIAL:   2017-02-26, RS: Created file on thinkreto.
 # -------------------------------------------------------------------
-# - L@ST MODIFIED: 2017-04-14 10:20 on thinkreto
+# - L@ST MODIFIED: 2017-10-03 18:14 on thinkreto
 # -------------------------------------------------------------------
 
 # lon/lat: vector of longitudes and latitudes
@@ -48,6 +48,7 @@ weightmask <- function(lon,lat,weights=c(15,2,1),stripsize=5) {
 # Try to reproduce the ZAMG weight mask as proposes by Thomas Kennert, ZAMG
 weightmaskZAMG <- function(lon,lat,weights=c(15,2,1),...) {
 
+   lon <- sort(lon); lat <- sort(lat)
    message("Using ZAMG weight mask specification. Please think about it!")
    if ( ! is.numeric(weights) | ! length(weights) == 3 )
       stop("Misspecification of \"weights\" in function weightmask.")
