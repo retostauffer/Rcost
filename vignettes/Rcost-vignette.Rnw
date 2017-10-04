@@ -2,6 +2,7 @@
 
 %% Required packages
 \usepackage{hyperref}
+\usepackage{amsfonts}
 
 %% need no \usepackage{Sweave}
 \newcommand{\pkg}[1]{\texttt{#1}}
@@ -53,6 +54,8 @@ are implemented yet. Implementation of these parameters should be feasible
 if needed.
 \end{abstract}
 
+% -------------------------------------------------------------------
+% -------------------------------------------------------------------
 \section{COST Action 733: WLK}
 
 The WLK (Wetterlagenklassifikation) algorithm is a relatively simple
@@ -70,6 +73,9 @@ Thus, the classification can easily be performed on analysis or re-analysis
 data (as in the package example), but also on numerical weather prediction
 (NWP) forecasts.  Please note that only regular latlong grids are supported!
 
+
+% -------------------------------------------------------------------
+% -------------------------------------------------------------------
 \section{Methodology}
 
 Originally the COST 733 WLK classification returns a set of strings and IDs
@@ -85,11 +91,13 @@ but looses the information about the strength of the curvature. \pkg{Rcost}
 returns both, binary \code{0/1}, but also the numeric value for the curvature
 which is very useful for certain applications.
 
+% -------------------------------------------------------------------
 \subsubsection*{In general: the weights}
 
 For all `variables' or sub-classes in the WLK classification a spatial weighting
 scheme is used (based on the weight mask, see Subsec.~\ref{subsec:weights}).
 
+% -------------------------------------------------------------------
 \subsubsection*{Wet or Dry}
 
 \pkg{Rcost} is currently using total column water (\code{tcw}) from the input files.
@@ -116,6 +124,7 @@ is set to \code{1} if $\mbox{pwi}_{\mbox{yday}} > \mbox{pwclim}_{\mbox{yday}}$ e
 \code{0} else. Subscript $\mbox{yday}$ indicates a certain day of the year, or
 Julian day.
 
+% -------------------------------------------------------------------
 \subsubsection*{Cyclonic or Anticyclonic}
 
 The cyclonicity is computed on the geopotential height, for both, the 500~hecto~Pascal
@@ -153,13 +162,54 @@ As for \code{pwi} the \pkg{Rcost} package returns both, the numeric value and
 a binary classification (\code{0}/\code{1}).
 
 
+% -------------------------------------------------------------------
 \subsubsection*{Main Wind Sector}
 
-Bla ...
+Decides whether there was a `main wind direction or not` based on weighted
+grid cell wise wind direction and a threshold (\code{maindirthreshold}
+see Sec.~\ref{sec:settings}). The wind direction is the meteorological
+wind direction with $0$ and $360$~degrees correspond to North wind (wind from North
+to South), $90$ East, $180$ South, and $270$ West.
+
+Each grid cell is attributed to one of the $N$ wind sectors
+(\code{nsector}, see Sec.~\ref{sec:settings}) where each wind sector
+covers $\frac{1}{N}$\textit{th} of 360~degrees. By default,
+eight wind sectors are considered (\code{nsector = 8}) wherefore 
+sector \code{1} is defined as wind direction $[0,45)$, sector
+\code{2} $[45,90)$ and so far and so on. 
+Given the weights (see Subsec.~\ref{subsec:weights}) the frequency
+for each sector is counted:
+
+\begin{equation}
+   f_n = \sum_{i=1}^{I} \sum_{j=1}^{J} \mathbf{1}_{i,j|n} w_{i,j}
+\end{equation}
+
+$f_n$ denotes the frequency for sector $n$ for each $n=1,N$,
+$\mathbf{1}_{i,j}$ is $1$ if the wind direction for grid cell $(i,j)$
+is attributed to wind sector $n$, and $w_{i,j}$ is the corresponding
+weight for grid cell $(i,j)$ with $i=1,I$ (longitude) and $j=1,J$ (latitude).
+
+Thus each wind sector $n=1,N$ gets a weighted frequency $f_1,\dots,f_N$.
+The sector with the highest frequency $f_n$ will be chosen as main wind
+direction sector, but only if the frequency $f_n$ exceeds a certain
+threshold (\code{maindirthreshold}, see Sec.~\ref{sec:settings}). Or
+in other words: $n$ is chosen as the main wind direction threshold
+for the sector with the highest $f_\bullet$ if and only if the
+weighted frequency $f_\bullet$ fulfills:
+
+\begin{equation}
+   \frac{f_\bullet}{\sum_{i=1}^I \sum_{j=1}^{J} w_{i,j}} > \mbox{maindirthreshold} 
+\end{equation}
+
+\dots where \code{maindirthreshold} is between 0 and 1.
+If no main wind sector can be found the WLK classification returns
+wind sector \code{0} which indicates ``variable wind direction''.
 
 
 
 
+% -------------------------------------------------------------------
+% -------------------------------------------------------------------
 \section{Input Data}\label{sec:input}
 
 The main method to retrieve the WLK classification is \code{getClassification(\dots)}
@@ -182,6 +232,8 @@ file names (\code{character} strings) of the two demo files.
 
 
 
+% -------------------------------------------------------------------
+% -------------------------------------------------------------------
 \section{Parameters and Settings}\label{sec:settings}
 
 COST 733 WLK provides a set of ``tuning parameters'', options, or settings. 
@@ -212,6 +264,8 @@ Implemented settings or options:
       European Alps.
 \end{itemize}
 
+% -------------------------------------------------------------------
+% -------------------------------------------------------------------
 \subsection{Weights and Stripsize}\label{subsec:weights}
 
 The classification uses a (squared) centered weighting mask for the
@@ -330,6 +384,8 @@ plot( res, nc = 2, col=rev(terrain.colors(17))[3:17], asp = NA )
    limits and is not centered anymore!}
 \end{figure}
 
+% -------------------------------------------------------------------
+% -------------------------------------------------------------------
 \section{Run Classification}
 
 The only function needed (beside \code{nc\_open} and \code{nc\_close} from the
@@ -352,6 +408,8 @@ x  <- getClassification( nc, init )
 for ( n in nc ) nc_close( n )
 @
 
+% -------------------------------------------------------------------
+% -------------------------------------------------------------------
 \section{Output}\label{sec:output}
 
 The output variable \code{x} contains the COST 733 classification. Namely the
@@ -391,8 +449,8 @@ As we have not specified a subset the classification \code{x} is based on the
 whole domain as provided by the demo files (\Sexpr{tmp[[1]]} to \Sexpr{tmp[2]}).
 
 
-
-
+% -------------------------------------------------------------------
+% -------------------------------------------------------------------
 \section*{Appendix/Examples}
 
 The \pkg{Rcost} \code{getClassification} function provides a variety of input
